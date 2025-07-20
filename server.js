@@ -1,4 +1,5 @@
 require("dotenv").config();
+const cron = require("node-cron");
 const { createClient } = require("redis");
 
 // Create Redis client
@@ -10,6 +11,7 @@ redisClient.on("error", (err) => {
   console.error("Redis Client Error", err);
 });
 
+// Function to ping Redis
 async function pingRedis() {
   try {
     console.log("Connecting to Redis...");
@@ -17,29 +19,25 @@ async function pingRedis() {
 
     console.log("Pinging Redis...");
     const response = await redisClient.ping();
-    console.log("Ping response:", response);
-
-    return true;
+    console.log("Redis Ping Response:", response);
   } catch (error) {
     console.error("Error pinging Redis:", error);
-    return false;
   } finally {
     if (redisClient.isOpen) {
-      console.log("Disconnecting from Redis...");
       await redisClient.disconnect();
+      console.log("Disconnected from Redis.");
     }
   }
 }
 
-module.exports = async (req, res) => {
-  console.log("Running Redis ping...");
-  const success = await pingRedis();
+// Run every 25 minutes (Upstash deletes after 1 day idle)
+cron.schedule("*/25 * * * *", async () => {
+  console.log(`\n[${new Date().toISOString()}] Running Redis ping...`);
+  await pingRedis();
+});
 
-  if (success) {
-    console.log("Ping successful");
-    res.status(200).send("Redis ping successful");
-  } else {
-    console.log("Ping failed");
-    res.status(500).send("Redis ping failed");
-  }
-};
+// Start immediately
+(async () => {
+  console.log("Node-cron Redis ping scheduler started.");
+  await pingRedis(); // Initial ping on startup
+})();
